@@ -24,12 +24,14 @@ var NetconfSession = function(username,password,host) {
   this.sshSessionID;
 };
 
+util.inherits(NetconfSession,events.EventEmitter);
+
 exports.NetconfSession = NetconfSession;
 
 NetconfSession.prototype.newSession = function() {
   var self = this;
   
-  self.sshSession = spawn('ssh', [self.host, '-s', 'netconf']); //spawn on connect
+  self.sshSession = spawn('ssh', [self.username + '@' + self.host, '-s', 'netconf']); //spawn on connect
   
   var data2process = '';
   var callback = function(data) {
@@ -41,7 +43,8 @@ NetconfSession.prototype.newSession = function() {
       if ( !! parsedJson.hello.sessionid) {
         self.sshSessionID = parsedJson.hello.sessionid;
       };
-       self.sshSession .stdout.removeListener('data', callback);
+      self.emit('newSession',parsedJson);
+       self.sshSession.stdout.removeListener('data', callback);
     } else {
       data2process = data2process + data.toString();
     };
@@ -57,25 +60,33 @@ NetconfSession.prototype.newSession = function() {
     console.log('SSH Session Exited: ' + code);
   });
 
-   self.sshSession.stdin.write(netconfCmd.sendHello());
+  self.sshSession.stdin.write(netconfCmd.sendHello());
 
 };
 
 NetconfSession.prototype.netconf2json = function(data) {
-    var jsonStr = parser.toJson(data.replace(/\]\]>\]\]>/g, '').replace(/^\s+|\s+$/g, '').replace(/(\w)[-]{1}(\w)/gi, '$1$2').replace(/(\w)[:]{1}(\w)/gi, '$1_$2'));
-    return jsonStr;
+  var jsonStr = parser.toJson(data.replace(/\]\]>\]\]>/g, '').replace(/^\s+|\s+$/g, '').replace(/(\w)[-]{1}(\w)/gi, '$1$2').replace(/(\w)[:]{1}(\w)/gi, '$1_$2'));
+  return jsonStr;
 };
 
 NetconfSession.prototype.netconf2obj = function(data) {
-    var json = JSON.parse(parser.toJson(data.replace(/\]\]>\]\]>/g, '').replace(/^\s+|\s+$/g, '').replace(/(\w)[-]{1}(\w)/gi, '$1$2').replace(/(\w)[:]{1}(\w)/gi, '$1_$2')));
-    return json;
+  var json = JSON.parse(parser.toJson(data.replace(/\]\]>\]\]>/g, '').replace(/^\s+|\s+$/g, '').replace(/(\w)[-]{1}(\w)/gi, '$1$2').replace(/(\w)[:]{1}(\w)/gi, '$1_$2')));
+  return json;
 };
 
-NetconfSession.prototype.sendCommand = function(options) {
+NetconfSession.prototype.getSoftwareInformation = function() {
+  var self = this;
+  var options = {
+    command: netconfCmd.getSoftwareInformation()
+  };
+  self._sendCommand(options);
+}
+
+NetconfSession.prototype._sendCommand = function(options) {
   var self = this;
   
   //temp storage for data
-  var data2process;
+  var data2process = '';
   
   self.sshSession.stdin.write(netconfCmd.getAuthorizationInformation()); // alright lets test this shit
   var callback = function(data, command) {
@@ -84,7 +95,7 @@ NetconfSession.prototype.sendCommand = function(options) {
       data2process = '';
       var parsedJson = self.netconf2obj(dataStr);
       //validate that the connection worked if it did then move forward, if not throw error
-      if (parsedJson.rpcreply.authorizationinformation.userinformation.user == 'root') {
+      if (parsedJson.rpcreply.authorizationinformation.userinformation.user == self.username) {
         //start nested callback
         self.sshSession.stdout.removeListener('data', callback);
         //send actual command here
@@ -95,9 +106,9 @@ NetconfSession.prototype.sendCommand = function(options) {
             var dataStr = data2process + data.toString();
             data2process = '';
             var parsedJson = ncParser.netconf2obj(dataStr);
+            self.emit('results',parsedJson);
             //validate that the connection worked if it did then move forward, if not throw error
             self.sshSession.stdout.removeListener('data', commandCallback);
-
           } else if ( !! data) {
             data2process = data2process + data.toString();
           } else {
@@ -110,7 +121,7 @@ NetconfSession.prototype.sendCommand = function(options) {
         //session is dead
         console.log('SSH session not found or is dead');
       };
-    } else if ( !! data) {
+    } else if (!!data) {
       data2process = data2process + data.toString();
     } else {
       data2process = data2process + data.toString();

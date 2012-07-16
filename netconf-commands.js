@@ -162,3 +162,33 @@ exports.getFlowSessionInformation = function() {
   var rpc = '<rpc><get-flow-session-information></get-flow-session-information></rpc>]]>]]>';
   return rpc;
 };
+
+/**
+ * Configure Private
+ *
+ * Opens a private configuration
+ *
+ * CLI Command:
+ *  - >configure private
+ *  
+ * @return {String} returns open configuration RPC
+ */
+exports.openPrivateConfig = function() {
+  var rpc = '<rpc><open-configuration><private/></open-configuration></rpc>]]>]]>';
+  return rpc
+};
+
+/**
+ * Commit configuration
+ *
+ * Commits candidate configration
+ *
+ * CLI Command:
+ *  - #commit
+ *  
+ * @return {String} returns commit RPC
+ */
+exports.openPrivateConfig = function() {
+  var rpc = '<rpc><commit-configuration><log>NC Node Commit</log></commit-configuration></rpc></xsl:variable>]]>]]>';
+  return rpc
+};
